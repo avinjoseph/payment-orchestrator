@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   api:
@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/payment_orchestrator
+      - DATABASE_URL=postgresql+asyncpg://postgres:securepassword@postgres:5432/payment_orchestrator
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=development
     volumes:
@@ -21,7 +21,7 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=securepassword
       - POSTGRES_DB=payment_orchestrator
     ports:
       - "5432:5432"

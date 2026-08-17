@@ -9,7 +9,6 @@ class PaymentCreateRequest(BaseModel):
     currency: str = Field(..., min_length=3, max_length=3, description="ISO 4217 currency code (e.g. USD, EUR, INR)")
     method: str = Field(..., description="Payment method: card, upi, netbanking, bank_transfer, wallet)")
     customer_ref: str | None = Field(None, description="Client unique customer reference")
-    idempotency_key: str = Field(..., description="Client unique idempotency key")
     
 class PaymentResponse(BaseModel):
     id: UUID

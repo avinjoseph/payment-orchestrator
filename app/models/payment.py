@@ -22,3 +22,16 @@ class PaymentResponse(BaseModel):
     
     model_config = ConfigDict(
         from_attributes=True)
+    
+class TransactionEventResponse(BaseModel):
+    id:int
+    from_status:str | None
+    to_status:str
+    gateway: str | None
+    reason: str | None
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+    
+class PaymentDetailResponse(PaymentResponse):
+    events: list[TransactionEventResponse] = []

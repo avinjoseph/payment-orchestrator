@@ -5,24 +5,25 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import TransactionEvents, Transactions
-from app.services.exceptions import IllegalTransitionError, TransactionNotFoundError
+from app.services.exceptions import IllegalTransitionError, TransactionNotFoundException
 
 
 class TransactionStateMachine:
-    ALLOWED_TRANSITIONS = dict[str, set[str]] = {  # noqa: RUF012
+    ALLOWED_TRANSITIONS: dict[str, set[str]] = {  # noqa: RUF012
         "created": {"routing", "processing", "failed"},
         "routing": {"processing", "failed"},
         "processing": {"authorized", "captured", "failed"},
         "authorized": {"captured", "voided", "failed"},
         "captured": {"settled", "refunded"},
         "settled": {"refunded"},
+        "failed": {"failed_final", "routing", "processing"},
         "refunded": set(),
         "voided": set(),
         "failed_final": set(),
     }
     
-    def __init__(self, db_session: AsyncSession):
-         self.db_session = db_session
+    def __init__(self, db: AsyncSession):
+         self.db = db
     
     def is_valid_transaction(self, from_status: str, to_status: str) -> bool:
         return to_status in self.ALLOWED_TRANSITIONS.get(from_status, set())
@@ -42,11 +43,11 @@ class TransactionStateMachine:
             .with_for_update()
         )
         
-        result = await self.db_session.execute(stmt)
+        result = await self.db.execute(stmt)
         txn = result.scalar_one_or_none()
         
         if not txn:
-            raise TransactionNotFoundError(transaction_id)
+            raise TransactionNotFoundException(transaction_id)
         
         if not self.is_valid_transaction(txn.status, to_status):
             raise IllegalTransitionError(
@@ -70,8 +71,8 @@ class TransactionStateMachine:
             reason=reason,
             payload=payload,
         )
-        self.db_session.add(event)
-        await self.db_session.flush()  # Ensure the event is persisted before returning the transaction
+        self.db.add(event)
+        await self.db.flush()  # Ensure the event is persisted before returning the transaction
         return txn
     
     

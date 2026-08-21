@@ -1,6 +1,11 @@
-from fastapi import APIRouter, Header, Depends, status
-from app.services.payment_services import PaymentCreateRequest, PaymentResponse, PaymentService
+from fastapi import APIRouter, Depends, Header, status
+
 from app.api.dependencies import get_payment_service
+from app.services.payment_services import (
+    PaymentCreateRequest,
+    PaymentResponse,
+    PaymentService,
+)
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -11,9 +16,8 @@ async def create_payment(
     payment_service: PaymentService = Depends(get_payment_service)
     
 ):
-    txn = await payment_service.process_payment(
+    return await payment_service.process_payment(
         payload=payload,
         idempotency_key=idempotency_key
     )
     
-    return txn

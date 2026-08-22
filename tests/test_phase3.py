@@ -1,11 +1,12 @@
 # tests/test_phase3.py
+import uuid
+
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
 from app.core.redis_client import get_redis_client
 from app.gateways.mock import MockGatewayAdapter
 from app.gateways.registry import GatewayRegistry
-from app.main import create_app
 from app.services.health_monitor import GatewayHealthMonitor
 from app.services.router import SmartRouter
 
@@ -15,7 +16,7 @@ async def test_health_monitor_and_routing():
     redis = await get_redis_client()
     monitor = GatewayHealthMonitor(redis=redis, window_minutes=2)
 
-    # Simulate Gateway A degrading (failures + high latency)
+    # Simulate Gateway A degrading
     for _ in range(5):
         await monitor.record_outcome(gateway="gw_a", success=False, latency_ms=1800)
     
@@ -28,7 +29,6 @@ async def test_health_monitor_and_routing():
     
     assert score_b > score_a
 
-    # Refresh cached scores in Redis
     await monitor.refresh_scores(["gw_a", "gw_b"])
 
     custom_registry = GatewayRegistry()
@@ -39,18 +39,22 @@ async def test_health_monitor_and_routing():
     selected = await router.select_gateway(method="card", currency="USD")
     assert selected == "gw_b"
 
+
 @pytest.mark.asyncio
-async def test_end_to_end_multi_gateway_flow():
-    transport = ASGITransport(app=create_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # UPI method routes automatically
-        res = await client.post("/payments", json={
+async def test_end_to_end_multi_gateway_flow(async_client: AsyncClient):
+    idempotency_key = f"test-phase3-upi-{uuid.uuid4().hex[:8]}"
+    
+    res = await async_client.post(
+        "/payments",
+        json={
             "amount": 50000,
             "currency": "INR",
             "method": "upi",
             "customer_ref": "cust_upi_1"
-        }, headers={"Idempotency-Key": "test-phase3-upi-001"})
+        },
+        headers={"Idempotency-Key": idempotency_key}
+    )
 
-        assert res.status_code == 201
-        data = res.json()
-        assert data["gateway"] in ["mock", "razorpay", "upi"]
+    assert res.status_code == 201
+    data = res.json()
+    assert data["gateway"] in ["mock", "razorpay", "upi"]

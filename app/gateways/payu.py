@@ -2,7 +2,7 @@
 import hmac
 import hashlib
 import httpx
-from app.adapters.base import GatewayAdapter, GatewayResponse, TransientGatewayError
+from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
 
 class PayUAdapter(GatewayAdapter):
     def __init__(self, merchant_key: str = "payu_key", merchant_salt: str = "payu_salt"):

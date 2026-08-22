@@ -13,11 +13,10 @@ class TransientGatewayError(DomainException):
         
 @dataclass(frozen=True)        
 class GatewayResponse:
-    success: bool
+    status: GatewayStatus
     gateway_txn_id: str | None
-    status: str | None
     error_message: str | None = None
-    raw_payload: dict | None = None
+    raw: dict | None = None
     
 class GatewayAdapter(Protocol):
     name :str

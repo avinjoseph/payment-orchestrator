@@ -6,7 +6,7 @@ from app.api.error_handlers import register_error_handlers
 from app.api.routes.health import router as health_router
 from app.api.routes.payments import router as payments_router
 from app.config import settings
-from app.core.redis_client import close_redis, init_redis
+from app.core.redis_client import close_redis, get_redis_client
 from app.db.session import Base, engine
 
 
@@ -14,7 +14,7 @@ from app.db.session import Base, engine
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    redis = await init_redis()
+    redis = await get_redis_client()
     await redis.ping()
     
     yield

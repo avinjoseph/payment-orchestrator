@@ -24,4 +24,12 @@ class IdempotencyConflictError(DomainException):
         )
         self.idempotency_key = idempotency_key
         
-        
+class AllGatewaysExhaustedError(DomainException):
+    def __init__(self, attempted: list[str]):
+        super().__init__(f"All eligible gateways were exhausted without success: {attempted}")
+        self.attempted = attempted
+
+class FailoverBudgetExceededError(DomainException):
+    def __init__(self, elapsed_ms: int):
+        super().__init__(f"Failover time budget exceeded ({elapsed_ms}ms).")
+        self.elapsed_ms = elapsed_ms

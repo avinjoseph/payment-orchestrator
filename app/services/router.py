@@ -2,13 +2,9 @@
 from app.gateways.registry import GatewayRegistry
 from app.gateways.registry import registry as default_registry
 from app.services.circuit_breaker import CircuitBreaker
-from app.services.exceptions import DomainException
+from app.services.exceptions import DomainException, NoHealthyGatewayError
 from app.services.health_monitor import GatewayHealthMonitor
 
-
-class NoHealthyGatewayError(DomainException):
-    def __init__(self, method: str, currency: str):
-        super().__init__(f"No healthy gateways available for method='{method}' and currency='{currency}'")
 
 class SmartRouter:
     def __init__(self, health_monitor: GatewayHealthMonitor, registry: GatewayRegistry | None = None):

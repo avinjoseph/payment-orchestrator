@@ -1,6 +1,7 @@
+import time
 import uuid
 from typing import Any
-import time
+
 from fastapi.encoders import jsonable_encoder
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +24,7 @@ class PaymentService:
         self.redis = redis
         self.registry = registry or default_registry
         self.state_machine = TransactionStateMachine(db=self.db)
-        self.idempotency = IdempotencyManager(redis=redis)
+        self.idempotency = IdempotencyManager(redis=self.redis)
         self.health_monitor = GatewayHealthMonitor(redis=self.redis)
         self.router = SmartRouter(health_monitor=self.health_monitor, registry=self.registry)
         

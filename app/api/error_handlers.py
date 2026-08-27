@@ -4,9 +4,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.services.exceptions import (
+    AllGatewaysExhaustedError,
     DomainException,
+    FailoverBudgetExceededError,
     IdempotencyConflictError,
     IllegalTransitionError,
+    NoHealthyGatewayError,
     TransactionNotFoundException,
 )
 
@@ -105,4 +108,17 @@ def register_error_handlers(app: FastAPI) -> None:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             error_code="INTERNAL_SERVER_ERROR",
             message="An unexpected error occurred while processing the request.",
+        )
+        
+        
+    # Inside register_error_handlers(app):
+    @app.exception_handler(AllGatewaysExhaustedError)
+    @app.exception_handler(FailoverBudgetExceededError)
+    @app.exception_handler(NoHealthyGatewayError)
+    async def gateway_failover_error_handler(request: Request, exc: DomainException):
+        logger.error("gateway_failover_exhaustion", path=request.url.path, error=str(exc))
+        return make_error_response(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            error_code="GATEWAY_UNAVAILABLE",
+            message=str(exc)
         )

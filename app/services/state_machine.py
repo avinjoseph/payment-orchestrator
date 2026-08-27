@@ -12,7 +12,7 @@ class TransactionStateMachine:
     ALLOWED_TRANSITIONS: dict[str, set[str]] = {  # noqa: RUF012
         "created": {"routing", "processing", "failed"},
         "routing": {"processing", "failed"},
-        "processing": {"authorized", "captured", "failed"},
+        "processing": {"processing","authorized", "captured", "failed", "failed_final"},
         "authorized": {"captured", "voided", "failed"},
         "captured": {"settled", "refunded"},
         "settled": {"refunded"},

@@ -1,20 +1,29 @@
 # tests/conftest.py
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+
+from app.core.redis_client import close_redis, get_redis_client
+from app.db.session import AsyncSessionLocal, Base, engine
 from app.main import app
-from app.db.session import AsyncSessionLocal, engine
-from app.core.redis_client import get_redis_client, close_redis
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def cleanup_env_between_tests():
-    """Wipes Redis and Postgres tables before each test."""
+    """Ensures tables exist and wipes test data between tests."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     redis = await get_redis_client()
     await redis.flushdb()
     
     async with AsyncSessionLocal() as session:
-        await session.execute(text("TRUNCATE TABLE transaction_events, transactions RESTART IDENTITY CASCADE;"))
+        await session.execute(
+            text(
+                "TRUNCATE TABLE transaction_events, transactions, inbound_webhooks, reconciliation_mismatches "
+                "RESTART IDENTITY CASCADE;"
+            )
+        )
         await session.commit()
         
     yield

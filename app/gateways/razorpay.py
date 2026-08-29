@@ -1,7 +1,15 @@
-import hmac
 import hashlib
+import hmac
+
 import httpx
-from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
+
+from app.gateways.base import (
+    GatewayAdapter,
+    GatewayResponse,
+    SettlementRecord,
+    TransientGatewayError,
+    WebhookEvent,
+)
 
 RAZORPAY_STATUS_MAP = {
     "captured": "success",
@@ -78,3 +86,39 @@ class RazorpayAdapter(GatewayAdapter):
         signature = headers.get("x-razorpay-signature", "")
         expected = hmac.new(self.webhook_secret.encode(), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
+
+    def extract_event_id(self, payload: dict) -> str:
+        # Razorpay payload: {"event": "payment.captured", "payload": {"payment": {"entity": {"id": "pay_123"}}}}
+        payment_id = (
+            payload.get("payload", {})
+            .get("payment", {})
+            .get("entity", {})
+            .get("id", "")
+        )
+        event = payload.get("event", "event")
+        return f"{event}_{payment_id}"
+    
+    def map_webhook_to_status(self, payload: dict) -> WebhookEvent:
+        event = payload.get("event", "")
+        payment_entity = (
+            payload.get("payload", {})
+            .get("payment", {})
+            .get("entity", {})
+        )
+        gateway_txn_id = payment_entity.get("id", "")
+
+        event_map = {
+            "payment.captured": "success",
+            "payment.authorized": "pending",
+            "payment.failed": "declined",
+            "refund.processed": "refunded",
+        }
+        return WebhookEvent(
+            gateway_txn_id=gateway_txn_id,
+            event_type=event,
+            normalized_status=event_map.get(event, "ignored"),
+            raw=payload,
+        )
+
+    async def fetch_settlement_report(self) -> list[SettlementRecord]:
+        return []

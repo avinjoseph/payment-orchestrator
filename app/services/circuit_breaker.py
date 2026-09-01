@@ -1,9 +1,12 @@
 import time
 from typing import Literal
 from redis.asyncio import Redis
+import structlog
+from app.core.logging import CIRCUIT_BREAKER_STATE
 
 BreakerState = Literal["CLOSED", "OPEN", "HALF_OPEN"]
 
+logger = structlog.get_logger(__name__)
 
 class CircuitBreaker:
     def __init__(self, 
@@ -56,6 +59,8 @@ class CircuitBreaker:
         
     async def record_success(self) -> None:
         state = await self.get_state()
+        CIRCUIT_BREAKER_STATE.labels(gateway=self.gateway).set(0.0)
+        logger.info("circuit_breaker_closed", gateway=self.gateway)
         async with self.redis.pipeline(transaction=True) as pipe:
             pipe.delete(self._failures_key)
             pipe.delete(self._trial_lock_key)
@@ -80,6 +85,13 @@ class CircuitBreaker:
             
         failure_count = results[0]
         if failure_count >= self.fail_threshold:
+            CIRCUIT_BREAKER_STATE.labels(gateway=self.gateway).set(1.0)
+            logger.warning(
+                "circuit_breaker_opened",
+                gateway=self.gateway,
+                failure = failure_count)
+            
+        
             async with self.redis.pipeline(transaction=True) as pipe:
                 pipe.set(self._state_key, "OPEN")
                 pipe.set(self._opened_at_key, str(time.time()))

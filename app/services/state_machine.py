@@ -1,13 +1,15 @@
 import uuid
 from typing import Any
 
+import structlog
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import TransactionEvents, Transactions
 from app.services.exceptions import IllegalTransitionError, TransactionNotFoundException
 
-
+logger = structlog.get_logger(__name__)
 class TransactionStateMachine:
     ALLOWED_TRANSITIONS: dict[str, set[str]] = {  # noqa: RUF012
         "created": {"routing", "processing", "failed"},
@@ -45,6 +47,14 @@ class TransactionStateMachine:
         
         result = await self.db.execute(stmt)
         txn = result.scalar_one_or_none()
+        
+        logger.info(
+            "transaction_state_transition",
+            transaction_id=str(txn.id),
+            to_status=to_status,
+            gateway=gateway or txn.gateway,
+            reason=reason
+        )
         
         if not txn:
             raise TransactionNotFoundException(transaction_id)

@@ -1,0 +1,18 @@
+groups:
+  - name: payment_alerts
+    rules:
+      - alert: GatewayDegradedSuccessRate
+        expr: sum(rate(payment_requests_total{status="captured"}[5m])) by (gateway) / sum(rate(payment_requests_total[5m])) by (gateway) < 0.90
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway {{ $labels.gateway }} success rate is below 90%"
+
+      - alert: CircuitBreakerStuckOpen
+        expr: circuit_breaker_state == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gateway {{ $labels.gateway }} circuit breaker remains open"

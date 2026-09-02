@@ -1,14 +1,19 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.error_handlers import register_error_handlers
+from app.api.middleware import RequestCorrelationMiddleware
 from app.api.routes.health import router as health_router
 from app.api.routes.payments import router as payments_router
 from app.api.routes.webhooks import router as webhooks_router
 from app.config import settings
+from app.core.logging import setup_logging
 from app.core.redis_client import close_redis, get_redis_client
 from app.db.session import Base, engine
+
+setup_logging()
 
 
 @asynccontextmanager
@@ -29,6 +34,12 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan
     )
+    
+    # Middleware
+    application.add_middleware(RequestCorrelationMiddleware)
+    
+    # Metrics endpoint
+    Instrumentator().instrument(application).expose(application, endpoint="/metrics")
     
     register_error_handlers(application)    
     

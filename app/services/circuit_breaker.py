@@ -2,7 +2,7 @@ import time
 from typing import Literal
 from redis.asyncio import Redis
 import structlog
-from app.core.logging import CIRCUIT_BREAKER_STATE
+from app.core.metrics import CIRCUIT_BREAKER_STATE
 
 BreakerState = Literal["CLOSED", "OPEN", "HALF_OPEN"]
 

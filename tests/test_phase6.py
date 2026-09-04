@@ -2,6 +2,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_metrics_endpoint_exposed(async_client: AsyncClient):
     res = await async_client.get("/metrics")

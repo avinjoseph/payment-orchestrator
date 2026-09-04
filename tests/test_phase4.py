@@ -7,10 +7,9 @@ import pytest
 from app.core.redis_client import get_redis_client
 from app.db.models import Transactions
 from app.db.session import AsyncSessionLocal
-from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
+from app.gateways.base import GatewayAdapter, GatewayResponse
 from app.gateways.registry import GatewayRegistry
 from app.services.circuit_breaker import CircuitBreaker
-from app.services.exceptions import AllGatewaysExhaustedError
 from app.services.failover import FailoverEngine
 from app.services.state_machine import TransactionStateMachine
 

@@ -1,7 +1,9 @@
 # tests/test_phase3.py
 import uuid
 
+import httpx
 import pytest
+import respx
 from httpx import AsyncClient
 
 from app.core.redis_client import get_redis_client
@@ -40,10 +42,18 @@ async def test_health_monitor_and_routing():
     assert selected == "gw_b"
 
 
+# In tests/test_phase3.py
 @pytest.mark.asyncio
+@respx.mock
 async def test_end_to_end_multi_gateway_flow(async_client: AsyncClient):
-    idempotency_key = f"test-phase3-upi-{uuid.uuid4().hex[:8]}"
-    
+    respx.post("https://api.razorpay.com/v1/payments").mock(
+        return_value=httpx.Response(200, json={
+            "id": "pay_upi_phase3_1",
+            "status": "captured"
+        })
+    )
+
+    idempotency_key = f"test-phase3-upi-flow"
     res = await async_client.post(
         "/payments",
         json={
@@ -57,4 +67,4 @@ async def test_end_to_end_multi_gateway_flow(async_client: AsyncClient):
 
     assert res.status_code == 201
     data = res.json()
-    assert data["gateway"] in ["mock", "razorpay", "upi"]
+    assert data["gateway"] in ["razorpay", "upi"]

@@ -1,14 +1,17 @@
 import hashlib
 import hmac
+from typing import cast
 
 import httpx
 
 from app.gateways.base import (
     GatewayAdapter,
     GatewayResponse,
+        GatewayStatus,
     SettlementRecord,
     TransientGatewayError,
     WebhookEvent,
+    WebhookNormalizedStatus,
 )
 
 RAZORPAY_STATUS_MAP = {
@@ -54,7 +57,7 @@ class RazorpayAdapter(GatewayAdapter):
             error_code = data["error"].get("code")
 
         return GatewayResponse(
-            status=mapped_status,
+            status=cast(GatewayStatus, mapped_status),
             gateway_txn_id=data.get("id"),
             error_code=error_code,
             raw=data,
@@ -65,7 +68,7 @@ class RazorpayAdapter(GatewayAdapter):
             res = await client.get(f"{self.base_url}/payments/{gateway_txn_id}", auth=(self.key_id, self.key_secret))
         data = res.json()
         return GatewayResponse(
-            status=RAZORPAY_STATUS_MAP.get(data.get("status"), "error"),
+            status=cast(GatewayStatus, RAZORPAY_STATUS_MAP.get(data.get("status"), "error")),
             gateway_txn_id=data.get("id"),
             raw=data
         )
@@ -118,7 +121,7 @@ class RazorpayAdapter(GatewayAdapter):
         return WebhookEvent(
             gateway_txn_id=gateway_txn_id,
             event_type=event,
-            normalized_status=event_map.get(event, "ignored"),
+            normalized_status=cast(WebhookNormalizedStatus, event_map.get(event, "ignored")),
             raw=payload,
         )
 

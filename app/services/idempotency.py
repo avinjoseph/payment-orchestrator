@@ -50,7 +50,7 @@ class IdempotencyManager:
         
     @asynccontextmanager
     async def acquire_lock(self, idempotency_key:str) -> AsyncGenerator[None, None]:
-        lock_key = self._lock_key(idempotency_key)
+        # lock_key = self._lock_key(idempotency_key)
         lock_acquired = await self.acquire(idempotency_key)
         
         if not lock_acquired:

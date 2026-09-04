@@ -1,5 +1,4 @@
 # tests/test_phase3.py
-import uuid
 
 import httpx
 import pytest
@@ -53,7 +52,7 @@ async def test_end_to_end_multi_gateway_flow(async_client: AsyncClient):
         })
     )
 
-    idempotency_key = f"test-phase3-upi-flow"
+    idempotency_key = "test-phase3-upi-flow"
     res = await async_client.post(
         "/payments",
         json={

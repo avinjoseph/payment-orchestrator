@@ -46,6 +46,9 @@ class TransactionStateMachine:
         
         result = await self.db.execute(stmt)
         txn = result.scalar_one_or_none()
+
+        if not txn:
+            raise TransactionNotFoundException(transaction_id)
         
         logger.info(
             "transaction_state_transition",
@@ -54,9 +57,6 @@ class TransactionStateMachine:
             gateway=gateway or txn.gateway,
             reason=reason
         )
-        
-        if not txn:
-            raise TransactionNotFoundException(transaction_id)
         
         if not self.is_valid_transaction(txn.status, to_status):
             raise IllegalTransitionError(

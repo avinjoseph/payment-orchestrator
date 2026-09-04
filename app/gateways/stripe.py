@@ -1,7 +1,9 @@
 # app/adapters/stripe.py
+from typing import cast
+
 import httpx
 
-from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
+from app.gateways.base import GatewayAdapter, GatewayResponse, GatewayStatus, TransientGatewayError
 
 STRIPE_STATUS_MAP = {
     "succeeded": "success",
@@ -50,7 +52,7 @@ class StripeAdapter(GatewayAdapter):
 
         status_str = res_json.get("status", "unknown")
         return GatewayResponse(
-            status=STRIPE_STATUS_MAP.get(status_str, "error"),
+            status=cast(GatewayStatus, STRIPE_STATUS_MAP.get(status_str, "error")),
             gateway_txn_id=res_json.get("id"),
             raw=res_json
         )
@@ -61,7 +63,7 @@ class StripeAdapter(GatewayAdapter):
             res = await client.get(f"{self.base_url}/payment_intents/{gateway_txn_id}", headers=headers)
         res_json = res.json()
         return GatewayResponse(
-            status=STRIPE_STATUS_MAP.get(res_json.get("status"), "error"),
+            status=cast(GatewayStatus, STRIPE_STATUS_MAP.get(res_json.get("status"), "error")),
             gateway_txn_id=res_json.get("id"),
             raw=res_json
         )

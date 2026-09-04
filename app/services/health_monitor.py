@@ -51,7 +51,7 @@ class GatewayHealthMonitor:
         if all_latencies:
             all_latencies.sort()
             idx = int(0.95 * (len(all_latencies) - 1))
-            p95_lat = all_latencies[idx]
+            p95_lat: float = all_latencies[idx]
         else:
             p95_lat = 200.0
 

@@ -1,8 +1,6 @@
 # app/adapters/stripe.py
-import hmac
-import hashlib
-import time
 import httpx
+
 from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
 
 STRIPE_STATUS_MAP = {
@@ -35,7 +33,9 @@ class StripeAdapter(GatewayAdapter):
             async with httpx.AsyncClient(timeout=1.0) as client:
                 res = await client.post(f"{self.base_url}/payment_intents", data=data, headers=headers)
         except (httpx.TimeoutException, httpx.NetworkError) as e:
-            raise TransientGatewayError(self.name, f"Network timeout/disconnect: {str(e)}")
+            raise TransientGatewayError(
+                self.name, f"Network timeout/disconnect: {str(e)}"
+            ) from e
 
         if res.status_code >= 500:
             raise TransientGatewayError(self.name, f"5xx Gateway error: {res.text}")

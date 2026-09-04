@@ -21,7 +21,21 @@ class PaymentResponse(BaseModel):
     created_at: datetime
     
     model_config = ConfigDict(
-        from_attributes=True)
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": "b3e0cf55-a0ef-4eb1-a5bf-8547ad3e8b09",
+                "idempotency_key": "user_checkout_991823",
+                "amount": 5000,
+                "currency": "USD",
+                "status": "captured",
+                "gateway": "stripe",
+                "gateway_txn_id": "pi_3MtwBwLkdIwHu7ix28a3tqPa",
+                "created_at": "2026-09-04T10:00:00Z",
+                "updated_at": "2026-09-04T10:00:01Z"
+            }
+        }
+    )
     
 class TransactionEventResponse(BaseModel):
     id:int
@@ -34,4 +48,7 @@ class TransactionEventResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
 class PaymentDetailResponse(PaymentResponse):
-    events: list[TransactionEventResponse] = []
+    events: list[TransactionEventResponse] = Field(
+        default_factory=list,
+        description="Complete state machine lifecycle audit timeline"
+    )

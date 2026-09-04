@@ -1,8 +1,7 @@
 # app/adapters/upi.py
 import uuid
 
-import httpx
-from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
+from app.gateways.base import GatewayAdapter, GatewayResponse
 
 
 class UPIAdapter(GatewayAdapter):

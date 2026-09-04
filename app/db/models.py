@@ -1,10 +1,21 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, func, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.session import Base
+
 
 class Transactions(Base):
     __tablename__ = "transactions"
@@ -21,7 +32,12 @@ class Transactions(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    events: Mapped[list["TransactionEvents"]] = relationship("TransactionEvents", back_populates="transaction", cascade="all, delete-orphan")
+    events: Mapped[list["TransactionEvents"]] = relationship(
+        "TransactionEvents",
+        back_populates="transaction",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     
 class TransactionEvents(Base):
     __tablename__ = "transaction_events"

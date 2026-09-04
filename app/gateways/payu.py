@@ -1,8 +1,10 @@
 # app/adapters/payu.py
-import hmac
 import hashlib
+
 import httpx
+
 from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
+
 
 class PayUAdapter(GatewayAdapter):
     def __init__(self, merchant_key: str = "payu_key", merchant_salt: str = "payu_salt"):
@@ -29,7 +31,9 @@ class PayUAdapter(GatewayAdapter):
             async with httpx.AsyncClient(timeout=1.0) as client:
                 res = await client.post(self.base_url, data=payload)
         except (httpx.TimeoutException, httpx.NetworkError) as e:
-            raise TransientGatewayError(self.name, f"Network timeout/disconnect: {str(e)}")
+            raise TransientGatewayError(
+                self.name, f"Network timeout/disconnect: {str(e)}"
+            ) from e
 
         if res.status_code >= 500:
             raise TransientGatewayError(self.name, f"PayU 5xx Server error: {res.text}")

@@ -1,7 +1,12 @@
-import json 
+import asyncio
+import json
+import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Any
+from typing import Any
+
 from redis.asyncio import Redis
+
 from app.services.exceptions import IdempotencyConflictError
 
 
@@ -29,17 +34,37 @@ class IdempotencyManager:
             json.dumps(response),
             ex=self.cache_ttl_sec,
         )
+
+    async def acquire(self, idempotency_key: str) -> bool:
+        return bool(
+            await self.redis.set(
+                self._lock_key(idempotency_key),
+                "1",
+                nx=True,
+                px=self.lock_ttl_ms,
+            )
+        )
+
+    async def release(self, idempotency_key: str) -> None:
+        await self.redis.delete(self._lock_key(idempotency_key))
         
     @asynccontextmanager
     async def acquire_lock(self, idempotency_key:str) -> AsyncGenerator[None, None]:
         lock_key = self._lock_key(idempotency_key)
-        lock_acquired = await self.redis.set(lock_key, "1", nx=True, px=self.lock_ttl_ms)
+        lock_acquired = await self.acquire(idempotency_key)
         
         if not lock_acquired:
+            deadline = time.monotonic() + (self.lock_ttl_ms / 1000)
+            while time.monotonic() < deadline:
+                cached_response = await self.get_cached_response(idempotency_key)
+                if cached_response:
+                    yield
+                    return
+                await asyncio.sleep(0.01)
             raise IdempotencyConflictError(idempotency_key)
         
         try:
             yield
         finally:
-            await self.redis.delete(lock_key)
+            await self.release(idempotency_key)
     

@@ -1,7 +1,9 @@
 import time
 from typing import Literal
-from redis.asyncio import Redis
+
 import structlog
+from redis.asyncio import Redis
+
 from app.core.metrics import CIRCUIT_BREAKER_STATE
 
 BreakerState = Literal["CLOSED", "OPEN", "HALF_OPEN"]
@@ -15,14 +17,14 @@ class CircuitBreaker:
                  fail_threshold: int = 3,
                  window_seconds: int = 10,
                  cooldown_seconds: int = 15,
-                 trail_timeout_ms: int = 3000,):
+                 trial_timeout_ms: int = 3000,):
         
         self.gateway = gateway
         self.redis = redis
         self.fail_threshold = fail_threshold
         self.window_seconds = window_seconds
         self.cooldown_seconds = cooldown_seconds
-        self.trial_timeout_ms = trail_timeout_ms
+        self.trial_timeout_ms = trial_timeout_ms
         
         self._state_key = f"breaker:{gateway}:state"
         self._failures_key = f"breaker:{gateway}:failures"
@@ -76,6 +78,7 @@ class CircuitBreaker:
             await self.redis.set(self._state_key, "OPEN")
             await self.redis.set(self._opened_at_key, str(time.time()))
             await self.redis.delete(self._trial_lock_key)
+            CIRCUIT_BREAKER_STATE.labels(gateway=self.gateway).set(1.0)
             return
         
         async with self.redis.pipeline(transaction=True) as pipe:

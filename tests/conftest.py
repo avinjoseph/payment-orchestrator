@@ -3,20 +3,33 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from app.core.redis_client import close_redis, get_redis_client
+from app.core.redis_client import get_redis_client
 from app.db.session import AsyncSessionLocal, Base, engine
 from app.main import app
 
 
+@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
+async def initialize_test_database():
+    """Create all tables once per test session."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
 @pytest_asyncio.fixture(autouse=True)
 async def cleanup_env_between_tests():
-    """Ensures tables exist and wipes test data between tests."""
+    """Ensure database schema is up-to-date and wipe state cleanly before every test."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    redis = await get_redis_client()
-    await redis.flushdb()
-    
+    redis = get_redis_client()
+    try:
+        await redis.flushdb()
+    finally:
+        await redis.aclose()
+
     async with AsyncSessionLocal() as session:
         await session.execute(
             text(
@@ -25,16 +38,24 @@ async def cleanup_env_between_tests():
             )
         )
         await session.commit()
-        
+
     yield
 
-    await redis.flushdb()
-    await close_redis()
-    await engine.dispose()
+    redis = get_redis_client()
+    try:
+        await redis.flushdb()
+    finally:
+        await redis.aclose()
+
 
 
 @pytest_asyncio.fixture
-async def async_client():
+async def client():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+@pytest_asyncio.fixture
+async def async_client(client: AsyncClient):
+    yield client

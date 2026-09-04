@@ -38,7 +38,9 @@ class RazorpayAdapter(GatewayAdapter):
             async with httpx.AsyncClient(timeout=1.0) as client:
                 res = await client.post(f"{self.base_url}/payments", json=payload, auth=auth)
         except (httpx.TimeoutException, httpx.NetworkError) as e:
-            raise TransientGatewayError(self.name, f"Network timeout/disconnect: {str(e)}")
+            raise TransientGatewayError(
+                self.name, f"Network timeout/disconnect: {str(e)}"
+            ) from e
 
         if res.status_code >= 500:
             raise TransientGatewayError(self.name, f"5xx Gateway error: {res.text}")
@@ -55,7 +57,7 @@ class RazorpayAdapter(GatewayAdapter):
             status=mapped_status,
             gateway_txn_id=data.get("id"),
             error_code=error_code,
-            raw=data
+            raw=data,
         )
 
     async def get_status(self, gateway_txn_id: str) -> GatewayResponse:

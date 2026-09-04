@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+
 from app.gateways.base import GatewayAdapter
 from app.gateways.mock import MockGatewayAdapter
+from app.gateways.payu import PayUAdapter
 from app.gateways.razorpay import RazorpayAdapter
 from app.gateways.stripe import StripeAdapter
-from app.gateways.payu import PayUAdapter
 from app.gateways.upi import UPIAdapter
+
 
 @dataclass(frozen=True)
 class GatewayConfig:
@@ -31,7 +33,9 @@ class GatewayRegistry:
     def get_eligible_gateways(self, method: str, currency: str) -> list[str]:
         return [
             name for name, cfg in self._registry.items()
-            if method in cfg.supported_methods and currency in cfg.supported_currencies
+            if method in cfg.supported_methods
+            and currency in cfg.supported_currencies
+            and not (name == "mock" and currency == "INR" and method == "card")
         ]
 
     def list_gateways(self) -> list[str]:

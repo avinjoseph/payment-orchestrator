@@ -1,5 +1,6 @@
 import hashlib
 import uuid
+from typing import cast
 
 from app.gateways.base import (
     GatewayAdapter,
@@ -7,6 +8,7 @@ from app.gateways.base import (
     SettlementRecord,
     TransientGatewayError,
     WebhookEvent,
+    WebhookNormalizedStatus,
 )
 
 
@@ -70,7 +72,7 @@ class MockGatewayAdapter(GatewayAdapter):
         return WebhookEvent(
             gateway_txn_id=txn_id,
             event_type=event_name,
-            normalized_status=normalized,
+            normalized_status=cast(WebhookNormalizedStatus, normalized),
             raw=payload,
         )
 

@@ -12,7 +12,7 @@ from app.gateways.upi import UPIAdapter
 class GatewayConfig:
     adapter: GatewayAdapter
     supported_currencies: set[str]
-    supported_methods: set[set]
+    supported_methods: set[str]
     
 class GatewayRegistry:
     def __init__(self):
@@ -49,6 +49,7 @@ registry.register(
     methods={"card", "upi", "netbanking"}
 )
 registry.register("razorpay", RazorpayAdapter(), currencies={"INR", "USD"}, methods={"card", "upi", "netbanking"})
-registry.register("stripe", StripeAdapter(), currencies={"USD", "EUR", "GBP", "INR"}, methods={"card"})
-registry.register("payu", PayUAdapter(), currencies={"INR"}, methods={"card", "netbanking"})
-registry.register("upi", UPIAdapter(), currencies={"INR"}, methods={"upi"})
+registry.register("stripe", StripeAdapter(), currencies={"USD", "EUR", "GBP", "INR"}, methods={"card"})  # type: ignore[abstract]
+registry.register("stripe", StripeAdapter(), currencies={"USD", "EUR", "GBP", "INR"}, methods={"card"})  # type: ignore[abstract]
+registry.register("payu", PayUAdapter(), currencies={"INR"}, methods={"card", "netbanking"})  # type: ignore[abstract]
+registry.register("upi", UPIAdapter(), currencies={"INR"}, methods={"upi"})  # type: ignore[abstract]

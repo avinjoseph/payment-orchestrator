@@ -1,3 +1,5 @@
+from typing import Any
+
 import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -20,10 +22,10 @@ def make_error_response(
     status_code: int,
     error_code: str,
     message: str,
-    details: dict | list | None = None,
+    details: Any = None,
 ) -> JSONResponse:
     """Builds a standardized error envelope across all API endpoints."""
-    content = {
+    content: dict[str, Any] = {
         "success": False,
         "error": {
             "code": error_code,

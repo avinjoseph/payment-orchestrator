@@ -1,4 +1,4 @@
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 PAYMENT_REQUESTS_TOTAL = Counter(
     "payment_requests_total",

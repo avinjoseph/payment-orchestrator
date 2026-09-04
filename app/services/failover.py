@@ -81,37 +81,53 @@ class FailoverEngine:
                 attempted.append(gateway_name)
                 continue
 
-            adapter = self.registry.get_adapter(gateway_name)
             await self.state_machine.transition(
                 transaction_id=transaction_id,
                 to_status="processing",
                 gateway=gateway_name,
-                reason=f"Attempt {attempt_idx + 1}: Dispatching charge to {gateway_name}"
+                reason=f"Attempt {attempt_idx + 1}: Dispatching charge to {gateway_name}",
             )
+            await self.state_machine.db.commit()
 
             # Cap individual attempt timeout to per-gateway budget or remaining total
+            adapter = self.registry.get_adapter(gateway_name)
             attempt_timeout = min(self.budget.gateway_response_timeout_sec, remaining_total)
             call_start = time.perf_counter()
 
             try:
-                resp = await asyncio.wait_for(...)
-                elapsed_ms = time.perf_counter() - call_start
-                
-                PAYMENT_LATENCY_SECONDS.labels(gateway=gateway_name).observe(elapsed_ms)
+                resp = await asyncio.wait_for(
+                    adapter.charge(
+                        amount=amount,
+                        currency=currency,
+                        method=method,
+                        idempotency_key=idempotency_key,
+                    ),
+                    timeout=attempt_timeout,
+                )
+                elapsed_sec = time.perf_counter() - call_start
+                PAYMENT_LATENCY_SECONDS.labels(gateway=gateway_name).observe(elapsed_sec)
                 PAYMENT_REQUESTS_TOTAL.labels(gateway=gateway_name, status=resp.status).inc()
                 logger.info(
-                    "gateway_charge_completed", gateway=gateway_name, status=resp.status, duration_ms=int(elapsed_ms * 1000))
-                return ...
-            except (TransientGatewayError, asyncio.TimeoutError) as ex:
-                elapsed_ms = time.perf_counter() - call_start
-                PAYMENT_LATENCY_SECONDS.labels(gateway=gateway_name).observe(elapsed_ms)
-                PAYMENT_REQUESTS_TOTAL.labels(gateway=gateway_name, status="failure").inc()
-                
+                    "gateway_charge_completed",
+                    gateway=gateway_name,
+                    status=resp.status,
+                    duration_ms=int(elapsed_sec * 1000),
+                )
+                return FailoverResult(
+                    gateway_name=gateway_name,
+                    response=resp,
+                    attempted_gateways=attempted + [gateway_name],
+                )
+            except (TimeoutError, TransientGatewayError, AssertionError) as ex:
+                elapsed_sec = time.perf_counter() - call_start
+                PAYMENT_LATENCY_SECONDS.labels(gateway=gateway_name).observe(elapsed_sec)
+                PAYMENT_REQUESTS_TOTAL.labels(gateway=gateway_name, status="failed").inc()
                 logger.warning(
                     "gateway_charge_failed",
                     gateway=gateway_name,
                     error=str(ex),
-                    duration_ms=int(elapsed_ms * 1000))
+                    duration_ms=int(elapsed_sec * 1000),
+                )
                 attempted.append(gateway_name)
                 
                 next_candidate = await self.router.select_gateway(
@@ -128,40 +144,5 @@ class FailoverEngine:
                         to_gateway=next_candidate,
                         attempt=attempt_idx + 1
                     )
-            
-            # try:
-            #     resp: GatewayResponse = await asyncio.wait_for(
-            #         adapter.charge(
-            #             amount=amount,
-            #             currency=currency,
-            #             method=method,
-            #             idempotency_key=idempotency_key
-            #         ),
-            #         timeout=attempt_timeout
-            #     )
-            #     call_elapsed_ms = int((time.perf_counter() - call_start) * 1000)
-
-            #     await breaker.record_success()
-            #     await self.health_monitor.record_outcome(
-            #         gateway=gateway_name,
-            #         success=(resp.status in ["success", "pending"]),
-            #         latency_ms=call_elapsed_ms
-            #     )
-            #     return FailoverResult(
-            #         gateway_name=gateway_name,
-            #         response=resp,
-            #         attempted_gateways=attempted + [gateway_name]
-            #     )
-
-            # except (TransientGatewayError, asyncio.TimeoutError) as ex:
-            #     call_elapsed_ms = int((time.perf_counter() - call_start) * 1000)
-            #     await breaker.record_failure()
-            #     await self.health_monitor.record_outcome(
-            #         gateway=gateway_name,
-            #         success=False,
-            #         latency_ms=call_elapsed_ms
-            #     )
-            #     attempted.append(gateway_name)
-            #     continue
 
         raise AllGatewaysExhaustedError(attempted=attempted)

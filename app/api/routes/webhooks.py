@@ -1,7 +1,7 @@
 import json
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,8 +25,11 @@ async def ingest_webhook(
 ):
     try:
         adapter = registry.get_adapter(gateway)
-    except KeyError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Gateway '{gateway}' not recognized")
+    except KeyError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Gateway '{gateway}' not recognized",
+        ) from err
     
     # 1. Read exact raw bytes for cryptographic signature verification
     raw_body = await request.body()
@@ -39,9 +42,9 @@ async def ingest_webhook(
 
     try:
         payload = json.loads(raw_body.decode("utf-8"))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed JSON")
-    
+    except Exception as err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed JSON") from err
+
     # 3. Extract unique Event ID
     event_id = adapter.extract_event_id(payload)
 

@@ -1,6 +1,8 @@
 # app/services/health_monitor.py
 import time
+
 from redis.asyncio import Redis
+
 
 class GatewayHealthMonitor:
     def __init__(self, redis: Redis, window_minutes: int = 5, latency_ceiling_ms: float = 2000.0):
@@ -42,7 +44,7 @@ class GatewayHealthMonitor:
 
         total_requests = total_success + total_failure
         if total_requests == 0:
-            return 1.0  # Optimistic default
+            return 0.5
 
         success_rate = total_success / total_requests
 
@@ -59,6 +61,10 @@ class GatewayHealthMonitor:
         # Health Formula: 70% success rate + 30% latency performance
         score = (0.7 * success_rate) + (0.3 * latency_score)
         return round(score, 4)
+
+    async def has_recent_observations(self, gateway: str) -> bool:
+        bucket = self._get_minute_bucket()
+        return bool(await self.redis.exists(f"stats:{gateway}:{bucket}"))
 
     async def refresh_scores(self, gateways: list[str]) -> None:
         for gw in gateways:

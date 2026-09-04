@@ -1,4 +1,3 @@
-import time
 import uuid
 from typing import Any
 
@@ -7,13 +6,17 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Transactions
-from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
+from app.gateways.base import GatewayAdapter
 from app.gateways.registry import registry as default_registry
 from app.models.payment import PaymentCreateRequest, PaymentResponse
+from app.services.exceptions import (
+    AllGatewaysExhaustedError,
+    FailoverBudgetExceededError,
+    NoHealthyGatewayError,
+)
+from app.services.failover import FailoverEngine
 from app.services.health_monitor import GatewayHealthMonitor
 from app.services.idempotency import IdempotencyManager
-from app.services.exceptions import AllGatewaysExhaustedError, FailoverBudgetExceededError, NoHealthyGatewayError
-from app.services.failover import FailoverEngine
 from app.services.router import SmartRouter
 from app.services.state_machine import TransactionStateMachine
 

@@ -1,14 +1,17 @@
 # tests/scenarios/test_idempotency.py
 import asyncio
+
+import httpx
 import pytest
 import respx
-import httpx
 from httpx import AsyncClient
-from sqlalchemy import select, func
-from app.db.session import AsyncSessionLocal
-from app.db.models import Transactions
+from sqlalchemy import func, select
+
 from app.core.redis_client import get_redis_client
+from app.db.models import Transactions
+from app.db.session import AsyncSessionLocal
 from app.services.health_monitor import GatewayHealthMonitor
+
 
 @pytest.mark.scenario
 @respx.mock

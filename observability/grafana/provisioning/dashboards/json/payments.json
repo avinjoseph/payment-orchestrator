@@ -1,0 +1,51 @@
+{
+  "title": "Payment Orchestration Platform",
+  "panels": [
+    {
+      "title": "Gateway Success Rate (5m)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(payment_requests_total{status=\"captured\"}[5m])) by (gateway) / sum(rate(payment_requests_total[5m])) by (gateway) * 100",
+          "legendFormat": "{{gateway}}"
+        }
+      ]
+    },
+    {
+      "title": "Gateway p95 Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(payment_latency_seconds_bucket[5m])) by (le, gateway))",
+          "legendFormat": "{{gateway}}"
+        }
+      ]
+    },
+    {
+      "title": "Circuit Breaker State",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "circuit_breaker_state",
+          "legendFormat": "{{gateway}}"
+        }
+      ]
+    },
+    {
+      "title": "Failover Count",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(increase(failover_events_total[5m])) by (from_gateway, to_gateway)",
+          "legendFormat": "{{from_gateway}} -> {{to_gateway}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "refresh": "5s"
+}

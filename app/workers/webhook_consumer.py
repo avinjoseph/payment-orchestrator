@@ -1,15 +1,15 @@
 # app/workers/webhook_consumer.py
-import asyncio
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import AsyncSessionLocal
+from app.core.queue_client import WEBHOOK_GROUP_NAME, WEBHOOK_STREAM_NAME, QueueClient
 from app.db.models import Transactions
-from app.core.queue_client import QueueClient, get_queue_client, WEBHOOK_STREAM_NAME, WEBHOOK_GROUP_NAME
-from app.gateways.registry import GatewayRegistry, registry as default_registry
-from app.services.state_machine import TransactionStateMachine
+from app.db.session import AsyncSessionLocal
+from app.gateways.registry import GatewayRegistry
+from app.gateways.registry import registry as default_registry
 from app.services.exceptions import IllegalTransitionError
+from app.services.state_machine import TransactionStateMachine
 
 logger = structlog.get_logger(__name__)
 

@@ -2,7 +2,7 @@
 from app.gateways.registry import GatewayRegistry
 from app.gateways.registry import registry as default_registry
 from app.services.circuit_breaker import CircuitBreaker
-from app.services.exceptions import DomainException, NoHealthyGatewayError
+from app.services.exceptions import NoHealthyGatewayError
 from app.services.health_monitor import GatewayHealthMonitor
 
 
@@ -28,8 +28,12 @@ class SmartRouter:
 
         scored: list[tuple[str, float]] = []
         for gateway in healthy_candidates:
-            score = await self.health_monitor.get_cached_score(gateway)
+            if await self.health_monitor.has_recent_observations(gateway):
+                score = await self.health_monitor.compute_health_score(gateway)
+            else:
+                score = 0.5
             scored.append((gateway, score))
 
-        scored.sort(key=lambda item: item[1], reverse=True)
+        priority = {"stripe": 3, "razorpay": 2, "payu": 1, "upi": 1, "mock": 0}
+        scored.sort(key=lambda item: (item[1], priority.get(item[0], 0)), reverse=True)
         return scored[0][0]

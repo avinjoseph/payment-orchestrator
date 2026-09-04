@@ -6,14 +6,14 @@ from fastapi.encoders import jsonable_encoder
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import TransactionEvents, Transactions
+from app.db.models import Transactions
 from app.gateways.base import GatewayAdapter, GatewayResponse, TransientGatewayError
-from app.gateways.mock import MockGatewayAdapter
-from app.gateways.registry import GatewayRegistry
 from app.gateways.registry import registry as default_registry
 from app.models.payment import PaymentCreateRequest, PaymentResponse
 from app.services.health_monitor import GatewayHealthMonitor
 from app.services.idempotency import IdempotencyManager
+from app.services.exceptions import AllGatewaysExhaustedError, FailoverBudgetExceededError, NoHealthyGatewayError
+from app.services.failover import FailoverEngine
 from app.services.router import SmartRouter
 from app.services.state_machine import TransactionStateMachine
 
@@ -29,18 +29,15 @@ class PaymentService:
         self.router = SmartRouter(health_monitor=self.health_monitor, registry=self.registry)
         
     async def process_payment(self, payload: PaymentCreateRequest, idempotency_key: str) -> dict[str, Any]:
-        
+        async with self.idempotency.acquire_lock(idempotency_key):
+            return await self._process_payment(payload, idempotency_key)
+
+    async def _process_payment(self, payload: PaymentCreateRequest, idempotency_key: str) -> dict[str, Any]:
         # 1. Return cached payload immediately if already completed
         cached = await self.idempotency.get_cached_response(idempotency_key)
         if cached:
             return cached
-        
-        # 2. Acquire redis distribution lock
-        async with self.idempotency.acquire_lock(idempotency_key):
-            cached = await self.idempotency.get_cached_response(idempotency_key)
-            if cached:
-                return cached
-            
+
         # 3. Create transaction record in 'created' state
         txn_id = uuid.uuid4()   
              
@@ -65,49 +62,39 @@ class PaymentService:
             reason="Routing through dynamic scorecard"
         )
 
-        # 2. Dynamic Router Selection
-        gateway_name = await self.router.select_gateway(
-            method=payload.method,
-            currency=payload.currency
+        failover = FailoverEngine(
+            redis=self.redis,
+            state_machine=self.state_machine,
+            registry=self.registry,
         )
-        
-        adapter = self.registry.get_adapter(gateway_name)
-        
-        # 3. State Machine: routing -> processing
-        await self.state_machine.transition(
-            transaction_id=txn_id,
-            to_status="processing",
-            gateway=gateway_name,
-            reason=f"Selected healthiest gateway: {gateway_name}"
-        )
-        
-        # 4. Invoke Selected Gateway & Record Health Signal
-        start_time = time.perf_counter()
         try:
-            resp: GatewayResponse = await adapter.charge(
+            result = await failover.charge_with_failover(
+                transaction_id=txn_id,
                 amount=payload.amount,
                 currency=payload.currency,
                 method=payload.method,
-                idempotency_key=idempotency_key
+                idempotency_key=idempotency_key,
             )
-            elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-            await self.health_monitor.record_outcome(
-                gateway=gateway_name,
-                success=(resp.status in ["success", "pending"]),
-                latency_ms=elapsed_ms
-            )
-        except TransientGatewayError as ex:
-            elapsed_ms = int((time.perf_counter() - start_time) * 1000)
-            await self.health_monitor.record_outcome(
-                gateway=gateway_name,
-                success=False,
-                latency_ms=elapsed_ms
-            )
+            gateway_name = result.gateway_name
+            resp = result.response
+        except (AllGatewaysExhaustedError, FailoverBudgetExceededError, NoHealthyGatewayError):
+            current = txn.status
+            if current == "routing":
+                await self.state_machine.transition(
+                    transaction_id=txn_id,
+                    to_status="failed",
+                    reason="No healthy gateway available",
+                )
+            elif current == "processing":
+                await self.state_machine.transition(
+                    transaction_id=txn_id,
+                    to_status="failed",
+                    reason="All gateway attempts failed",
+                )
             await self.state_machine.transition(
                 transaction_id=txn_id,
-                to_status="failed",
-                gateway=gateway_name,
-                reason=f"Gateway transient error: {ex.message}"
+                to_status="failed_final",
+                reason="Gateway failover exhausted",
             )
             await self.db.commit()
             raise

@@ -1,76 +1,93 @@
 # .github/workflows/ci.yml
-name: Continuous Integration
+name: Continuous Integration & Security Auditing
 
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
 jobs:
   test-and-lint:
     runs-on: ubuntu-latest
-
     services:
       postgres:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres_test_password
+          POSTGRES_PASSWORD: test
           POSTGRES_DB: payment_orchestrator
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 5
       redis:
         image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 5
 
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
       - name: Install Dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Static Analysis
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          ruff check .
+          mypy app/
 
-      - name: Run Ruff Linter
-        run: ruff check .
-
-      - name: Run Mypy Type Checker
-        run: mypy app/
-
-      - name: Execute Pytest Suite with Coverage
+      - name: Execute Full Test Suite
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres_test_password@localhost:5432/payment_orchestrator
+          DATABASE_URL: postgresql+asyncpg://postgres:test@localhost:5432/payment_orchestrator
           REDIS_URL: redis://localhost:6379/0
           ENVIRONMENT: test
-        run: |
-          pytest -v --cov=app --cov-report=term-missing --cov-fail-under=75 tests/
+          CLIENT_API_KEYS_RAW: '{"test_client": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"}'
+        run: pytest -v --cov=app --cov-report=term-missing --cov-fail-under=75 tests/
 
-  docker-build:
+  security-scan:
     needs: test-and-lint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Build Docker Container
+      - name: Audit Python Dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+      - name: Build Local Image for Container Scan
         run: docker build -t payment-orchestrator:${{ github.sha }} .
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: payment-orchestrator:${{ github.sha }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  deploy:
+    needs: [test-and-lint, security-scan]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Production Database Migration
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          pip install alembic asyncpg psycopg2-binary
+          alembic upgrade head
+
+      - name: Deploy to Production
+        run: |
+          echo "Triggering zero-downtime rolling deployment for version ${{ github.ref_name }}."

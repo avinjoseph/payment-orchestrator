@@ -1,10 +1,14 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.error_handlers import register_error_handlers
-from app.api.middleware import RequestCorrelationMiddleware
+from app.api.middleware import (
+    RequestCorrelationMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.api.routes.health import router as health_router
 from app.api.routes.payments import router as payments_router
 from app.api.routes.webhooks import router as webhooks_router
@@ -31,13 +35,24 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     application = FastAPI(
         title=settings.PROJECT_NAME,
-        version="1.0.0",
-        lifespan=lifespan
+        version=settings.VERSION,
+        lifespan=lifespan,
+        docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+        redoc_url=None
     )
     
     # Middleware
+    application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(RequestCorrelationMiddleware)
     
+    if settings.CORS_ORIGINS:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.CORS_ORIGINS,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
+        )
     # Metrics endpoint
     Instrumentator().instrument(application).expose(application, endpoint="/metrics")
     

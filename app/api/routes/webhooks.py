@@ -1,16 +1,20 @@
 import json
+import time
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db_session
 from app.core.queue_client import WEBHOOK_STREAM_NAME, QueueClient, get_queue_client
+from app.core.rate_limiter import enforce_rate_limit
 from app.db.models import InboundWebhook
 from app.gateways.registry import GatewayRegistry
 from app.gateways.registry import registry as default_registry
+
+TIMESTAMP_TOLERANCE_SECONDS = 300
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
@@ -22,6 +26,7 @@ async def ingest_webhook(
     db: AsyncSession = Depends(get_db_session),
     queue: QueueClient = Depends(get_queue_client),
     registry: GatewayRegistry = Depends(lambda: default_registry),
+    x_webhook_timestamp: str | None = Header(None, alias="X-Webhook-Timestamp"),
 ):
     try:
         adapter = registry.get_adapter(gateway)
@@ -31,6 +36,19 @@ async def ingest_webhook(
             detail=f"Gateway '{gateway}' not recognized",
         ) from err
     
+    # 1. Enforce burst rate limit per gateway source
+    await enforce_rate_limit(identifier=f"webhook:{gateway}", limit=1000, window_seconds=60)
+
+    # 2. Guard against timestamp replay attacks if header is provided
+    if x_webhook_timestamp:
+        try:
+            sent_at = float(x_webhook_timestamp)
+            if abs(time.time() - sent_at) > TIMESTAMP_TOLERANCE_SECONDS:
+                logger.warning("stale_webhook_rejected", gateway=gateway, sent_at=sent_at)
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Webhook timestamp expired")
+        except ValueError as err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid timestamp format") from err
+        
     # 1. Read exact raw bytes for cryptographic signature verification
     raw_body = await request.body()
     headers_dict = dict(request.headers)

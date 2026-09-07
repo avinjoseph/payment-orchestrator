@@ -1,0 +1,22 @@
+# observability/deploy/Caddyfile
+api.paymentplatform.com {
+    encode gzip zstd
+
+    # Drop unauthorized access to internal monitoring endpoints
+    @blocked_metrics {
+        path /metrics
+    }
+    handle @blocked_metrics {
+        respond "Forbidden" 403
+    }
+
+    reverse_proxy api:8000 {
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Upstream health checking
+        health_uri /ready
+        health_interval 5s
+        health_timeout 2s
+    }
+}
